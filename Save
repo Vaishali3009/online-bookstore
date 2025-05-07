@@ -1,0 +1,21 @@
+@Service
+@RequiredArgsConstructor
+public class PaymentOrchestrator implements PaymentValidationPort {
+
+    private final AccountValidationPort accountValidationPort;
+
+    @Override
+    public AccountValidationResponse validateAccount(AccountValidationRequest request) {
+        // Step 1: Schema validation
+        accountValidationPort.validateSchema(request);
+
+        // Step 2: Business logic validation (to be implemented later)
+        return accountValidationPort.validate(request);
+    }
+
+    @Override
+    public CustomerEnrichmentResponse retrieveCustomer(CustomerEnrichmentRequest request) {
+        // Stubbed - to be implemented later
+        return new CustomerEnrichmentResponse();
+    }
+}
