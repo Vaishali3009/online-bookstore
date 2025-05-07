@@ -1,0 +1,543 @@
+<?xml version="1.0" encoding="UTF-8"?><xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema" 
+targetNamespace="http://com/rbsg/soa/C040PaymentManagement/ArrValidationForPayment/V01/TransferObjects/V01/" version="RBS_20210526_Baseline" 
+xmlns:avfpTO="http://com/rbsg/soa/C040PaymentManagement/ArrValidationForPayment/V01/TransferObjects/V01/" xmlns:pdt="http://com/rbsg/soa/DataTypes/PrimitiveDataTypes/V03/">
+  <xsd:import namespace="http://com/rbsg/soa/DataTypes/PrimitiveDataTypes/V03/" schemaLocation="PrimitiveDatatypes.xsd"/>
+  <xsd:complexType name="BaseTransferObject">
+    <xsd:sequence>
+      <xsd:element maxOccurs="unbounded" minOccurs="0" name="extendedProperties" type="pdt:Property"/>
+      <xsd:element minOccurs="0" name="lastUpdateToken" type="pdt:PropertyVariant">
+        <xsd:annotation>
+          <xsd:documentation>Datetime for objects that require optimistic locking on update.  The datetime retrieved is passed back on the update operation and 
+		  validated against the last updated datetime stored for the object.  If they are the same, the update can go ahead.  If not, another 
+		  update has occurred in the interim and the update is rejected.
+
+As this is on the BaseTransferObject, it can be used selectively for those objects within a retrieve and update operation response / request parameter set, 
+that require such optimistic locking.  This a a set on BMOs and the constituent dependent types, can be used to form a set of lock tokens.</xsd:documentation>
+        </xsd:annotation>
+      </xsd:element>
+    </xsd:sequence>
+  </xsd:complexType>
+  <xsd:complexType name="InvolvedPartyName_TO">
+    <xsd:annotation>
+      <xsd:documentation>Identifies a name associated with an Involved Party. Multiple names are possible both concurrently and over time, varying by the 
+	  use of the name such as the birth name or marriage name.</xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexContent>
+      <xsd:extension base="avfpTO:BaseTransferObject">
+        <xsd:sequence>
+          <xsd:element minOccurs="0" name="nameText" type="pdt:String">
+            <xsd:annotation>
+              <xsd:documentation>The complete aggregated name used for identifying a Role Player</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+        </xsd:sequence>
+      </xsd:extension>
+    </xsd:complexContent>
+  </xsd:complexType>
+  <xsd:complexType name="Organization_TO">
+    <xsd:annotation>
+      <xsd:documentation>Identifies a particular type of Involved Party that is a group of Individuals bound by a common purpose. This includes 
+	  commercial Organizations such as limited companies, publicly quoted multinationals, subsidiaries, etc. </xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexContent>
+      <xsd:extension base="avfpTO:InvolvedParty_TO">
+        <xsd:sequence>
+          <xsd:element minOccurs="0" name="parentOrganization" type="avfpTO:Organization_TO">
+            <xsd:annotation>
+              <xsd:documentation>Returns the parent Organization for given Organization.</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+        </xsd:sequence>
+      </xsd:extension>
+    </xsd:complexContent>
+  </xsd:complexType>
+  <xsd:complexType name="AccountArrangementIdentifierAssessment_TO">
+    <xsd:annotation>
+      <xsd:documentation>An Assessment that has an ArrangementIdentifier as its subject - to verify the correctness of an Arrangement identifier.</xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexContent>
+      <xsd:extension base="avfpTO:Assessment_TO">
+        <xsd:sequence>
+          <xsd:element minOccurs="0" name="modulusCheckStatus" type="pdt:Reference">
+            <xsd:annotation>
+              <xsd:documentation>Represents the result of the account arrangement identifier (Modulus Check) assessment. </xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+        </xsd:sequence>
+      </xsd:extension>
+    </xsd:complexContent>
+  </xsd:complexType>
+  <xsd:complexType name="Assessment_TO">
+    <xsd:annotation>
+      <xsd:documentation>Identifies the result of an evaluation, based on a subjective opinion or on a scientific result. This includes Financial Valuation of 
+	  Involved Partys, Market Segments, policies, places or other objects and scores calculated for risk assessment, marketing or other purposes.</xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexContent>
+      <xsd:extension base="avfpTO:BusinessModelObject_TO">
+        <xsd:sequence>
+          <xsd:element minOccurs="0" name="referred" type="pdt:Boolean">
+            <xsd:annotation>
+              <xsd:documentation>An arrangement assessment that results in certain payments to be referred to the Relationship Manager/Relationship Support 
+			  Team for authorisation. </xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+        </xsd:sequence>
+      </xsd:extension>
+    </xsd:complexContent>
+  </xsd:complexType>
+  <xsd:complexType name="BusinessModelObject_TO">
+    <xsd:annotation>
+      <xsd:documentation>Identifies the highest class of objects in the hierarchy of the Financial Services Business Object Model representing a thing or 
+	  a concept that is meaningful to the modeled Organization. Business Model Objects are superclasses of many objects that have business significance to
+	  business people and are used to provide common behavior across many object definitions. Examples of Business Model Object subclasses are Accounting Unit,
+	  Arrangement, Channel, Event, Product etc.</xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexContent>
+      <xsd:extension base="avfpTO:BaseTransferObject">
+        <xsd:sequence>
+          <xsd:element maxOccurs="unbounded" minOccurs="0" name="alternativeIdentifier" type="pdt:ObjectReference">
+            <xsd:annotation>
+              <xsd:documentation>An alternative identifier for the Business Object</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element maxOccurs="unbounded" minOccurs="0" name="isSubjectOf" type="avfpTO:Assessment_TO">
+            <xsd:annotation>
+              <xsd:documentation>Identifies the result of an assessment based on a subjective opinion or on a scientific result. </xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element minOccurs="0" name="universalUniqueIdentifier" type="pdt:ObjectReference">
+            <xsd:annotation>
+              <xsd:documentation>The unique identifier for the Business Object</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element maxOccurs="unbounded" minOccurs="0" name="isClassifiedBy" type="avfpTO:ClassificationValue_TO">
+            <xsd:annotation>
+              <xsd:documentation>The reference classification values that classify the given Business Object </xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+        </xsd:sequence>
+      </xsd:extension>
+    </xsd:complexContent>
+  </xsd:complexType>
+  <xsd:complexType name="ClassificationValue_TO">
+    <xsd:annotation>
+      <xsd:documentation>Identifies a grouping of Business Model Objects, for example; Single Males Under 30, Married People over 50, etc... A Classification
+	  Value can be further partitioned into several sub-classifications according to different criteria, each of which is represented in turn by a
+	  Classification Scheme.</xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexContent>
+      <xsd:extension base="avfpTO:BusinessModelObject_TO">
+        <xsd:sequence>
+          <xsd:element minOccurs="0" name="schemeName" type="pdt:String"/>
+          <xsd:element minOccurs="0" name="codeValue" type="pdt:String"/>
+          <xsd:element minOccurs="0" name="name" type="pdt:String">
+            <xsd:annotation>
+              <xsd:documentation>The word or phrase that identifies (but not uniquely) the object</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element minOccurs="0" name="shortName" type="pdt:String">
+            <xsd:annotation>
+              <xsd:documentation>An abridged version of classificationValue name Example: For retrieving job title reference data, If the name of the value is 
+			  AGRICULTURAL WORKER, the shortName is AG</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element minOccurs="0" name="lifecycleStatus" type="pdt:LifecycleStatus">
+            <xsd:annotation>
+              <xsd:documentation>The lifeyclestatus of the ClassificationValue. Eg If retrieving  reference data related to customer titles, a
+			  ClassificationValue by the name of 'Mr' or "Mrs" may have the lifecycle status of 'Current'</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element minOccurs="0" name="displayOrder" type="pdt:String"/>
+        </xsd:sequence>
+      </xsd:extension>
+    </xsd:complexContent>
+  </xsd:complexType>
+  <xsd:complexType name="GeographicArea_TO">
+    <xsd:annotation>
+      <xsd:documentation>Identifies a Location that is a place or a bounded area that is defined by nature, by an external authority, such as a
+	  government, or for an internal business purpose. </xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexContent>
+      <xsd:extension base="avfpTO:ClassificationValue_TO"/>
+    </xsd:complexContent>
+  </xsd:complexType>
+  <xsd:complexType abstract="true" name="Registration_TO">
+    <xsd:annotation>
+      <xsd:documentation>A formal granting, by an authorized body, of rights, privileges, favors, statuses, or qualifications. Registrations are 
+	  important from the perspective of being a qualified source of information. Note that a Registration represents the actual granting, not the Document that
+ represents those rights. that document is a Registration Document.</xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexContent>
+      <xsd:extension base="avfpTO:BusinessModelObject_TO">
+        <xsd:sequence>
+          <xsd:element minOccurs="0" name="lifeCycleStatus" type="pdt:LifecycleStatus">
+            <xsd:annotation>
+              <xsd:documentation>The position of the registration within a life-cycle model consisting of a number of statuses.</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element minOccurs="0" name="isIssuedIn" type="avfpTO:GeographicArea_TO">
+            <xsd:annotation>
+              <xsd:documentation>The place of the registration</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+        </xsd:sequence>
+      </xsd:extension>
+    </xsd:complexContent>
+  </xsd:complexType>
+  <xsd:complexType name="SortCodeRegistration_TO">
+    <xsd:annotation>
+      <xsd:documentation>A class representing the internal registration of a SortCode within the RBS Group</xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexContent>
+      <xsd:extension base="avfpTO:Registration_TO">
+        <xsd:sequence>
+          <xsd:element minOccurs="0" name="isTrainingBranch" type="pdt:Boolean">
+            <xsd:annotation>
+              <xsd:documentation>The traning branch of the sortcode registration</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element minOccurs="0" name="sortCodeRegistrationType" type="pdt:Reference">
+            <xsd:annotation>
+              <xsd:documentation>The sortcode registration type</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element minOccurs="0" name="paymentServicesProviderType" type="pdt:Reference">
+            <xsd:annotation>
+              <xsd:documentation>The Payment service provider type</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element minOccurs="0" name="agencyIndicator" type="pdt:String">
+            <xsd:annotation>
+              <xsd:documentation>Indicates if the registration unit is an agency</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element minOccurs="0" name="activeIndicator" type="pdt:String">
+            <xsd:annotation>
+              <xsd:documentation>Performs a dual purpose - indicates if the SortCode under the registration is Active, or Inactive as an internal SortCode,
+			  but in additional will indicate if the sort code is External (i.e. active/inactive are not relevant).</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element minOccurs="0" name="nonFPSettlementSortCode" type="pdt:String">
+            <xsd:annotation>
+              <xsd:documentation>The sortcode aspect of a Settlement Account associated with a HOCA or Agency for Non-Faster Payments (eg paper and BACS 
+			  payments)</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element minOccurs="0" name="nonFPSettlementAccountNumber" type="pdt:String">
+            <xsd:annotation>
+              <xsd:documentation>The account number aspect of a Settlement Account associated with a HOCA or Agency for Non-Faster Payments (eg paper and 
+			  BACS payments)</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element minOccurs="0" name="isCreditCardHOCA" type="pdt:Boolean">
+            <xsd:annotation>
+              <xsd:documentation>Used to distinguish credit card HOCA sortcodes from other HOCA’s due to the need to apply special processing for to meet 
+			  PSD2 Credit Card processing rules.</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element minOccurs="0" name="FPSettlementSortCode" type="pdt:String">
+            <xsd:annotation>
+              <xsd:documentation>The sortcode aspect of a Settlement Account associated with Faster Payments for a HOCA or Agency.</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element minOccurs="0" name="FPSettlementAccountNumber" type="pdt:String">
+            <xsd:annotation>
+              <xsd:documentation>The account number aspect of a Settlement Account associated with Faster Payments for a HOCA or Agency.</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element minOccurs="0" name="FPSettlementType" type="pdt:String">
+            <xsd:annotation>
+              <xsd:documentation>Indicates whether or not this is an FP enabled Agency or a Credit Card HOCA.</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element minOccurs="0" name="isFPEnabled" type="pdt:String">
+            <xsd:annotation>
+              <xsd:documentation>Indicates whether the Sortcode is FP Enabled as a Member, Agency or not FP Enabled.</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element minOccurs="0" name="isInternalFunction" type="pdt:Boolean">
+            <xsd:annotation>
+              <xsd:documentation>Indicates whether the business processing carried out under the SortCode is deemed to be internal to RBS or not.</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+        </xsd:sequence>
+      </xsd:extension>
+    </xsd:complexContent>
+  </xsd:complexType>
+  <xsd:complexType name="OrganizationUnit_TO">
+    <xsd:annotation>
+      <xsd:documentation>Identifies a particular type of Involved Party that is a component or subdivision of an &lt;Organization&gt; established
+	  for the purpose of performing discrete functional responsibilities. This typically represents the Organizational structure of the modeled Organization 
+	  including sections, departments, district offices, projects, and employment positions.</xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexContent>
+      <xsd:extension base="avfpTO:InvolvedParty_TO">
+        <xsd:sequence>
+          <xsd:element minOccurs="0" name="parentOrganization" type="avfpTO:Organization_TO">
+            <xsd:annotation>
+              <xsd:documentation>Returns the parent Organization for given Organization Unit. </xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element minOccurs="0" name="sortCodeRegistration" type="avfpTO:SortCodeRegistration_TO">
+            <xsd:annotation>
+              <xsd:documentation>Details of the internal registration of a SortCode within the Natwest Group</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+        </xsd:sequence>
+      </xsd:extension>
+    </xsd:complexContent>
+  </xsd:complexType>
+  <xsd:complexType abstract="true" name="RolePlayer_TO">
+    <xsd:annotation>
+      <xsd:documentation>Identifies an Involved Party or a role played by an Involved Party within the context of the modeled organization.</xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexContent>
+      <xsd:extension base="avfpTO:BusinessModelObject_TO"/>
+    </xsd:complexContent>
+  </xsd:complexType>
+  <xsd:complexType name="InvolvedParty_TO">
+    <xsd:annotation>
+      <xsd:documentation>Identifies a particular type of Role Player that is any participant that may have contact with, or that is of interest to 
+	  the modeled organization, and about which the Financial Institution wishes to maintain information. This includes the modeled organization itself.</xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexContent>
+      <xsd:extension base="avfpTO:RolePlayer_TO">
+        <xsd:sequence>
+          <xsd:element maxOccurs="unbounded" minOccurs="0" name="hasForName" type="avfpTO:InvolvedPartyName_TO">
+            <xsd:annotation>
+              <xsd:documentation>Identifies a name associated with an Involved Party</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+        </xsd:sequence>
+      </xsd:extension>
+    </xsd:complexContent>
+  </xsd:complexType>
+  <xsd:complexType name="Balance_TO">
+    <xsd:annotation>
+      <xsd:documentation>Identifies a value that is the net of all debits and credits posted to an Accounting Unit at a particular point in time 
+	  (usually covering a defined time period, such as day, month, year.)</xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexContent>
+      <xsd:extension base="avfpTO:BaseTransferObject">
+        <xsd:sequence>
+          <xsd:element minOccurs="0" name="balanceDerivationType" type="pdt:BalanceType">
+            <xsd:annotation>
+              <xsd:documentation>The kind of balance of this object represents. </xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element minOccurs="0" name="postedAmount" type="pdt:CurrencyAmount">
+            <xsd:annotation>
+              <xsd:documentation>Specifies the monetary (e.g. currency amount) or non-monetary (e.g. an integer counter) value of the Period Balance 
+			  Type for the associated Accounting Unit and Scenario at the time designated by the Point Balance Type, before any later adjustments are made. </xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+        </xsd:sequence>
+      </xsd:extension>
+    </xsd:complexContent>
+  </xsd:complexType>
+  <xsd:complexType name="AccountingUnit_TO">
+    <xsd:annotation>
+      <xsd:documentation>A repository used to monitor both monetary and non-monetary standings and used to support the operation of an Arrangement. 
+	  An Accounting Unit can stand independently, or it can combine the values of other Accounting Units as in summarizing the position of the Financial
+	  Institution in a General Ledger or accounting for groups of arrangements.</xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexContent>
+      <xsd:extension base="avfpTO:BusinessModelObject_TO">
+        <xsd:sequence>
+          <xsd:element minOccurs="0" name="name" type="pdt:String">
+            <xsd:annotation>
+              <xsd:documentation>The non-unique label by which an instance of Accounting Unit is known.</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element maxOccurs="unbounded" minOccurs="0" name="hasBalance" type="avfpTO:Balance_TO">
+            <xsd:annotation>
+              <xsd:documentation>Identifies the Balances associated with the Accounting Unit.</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element minOccurs="0" name="status" type="pdt:Reference">
+            <xsd:annotation>
+              <xsd:documentation>Distinguishes between Accounting Units according to their standing in relation to legal and bank-imposed parameters and 
+			  restrictions</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element minOccurs="0" name="badDebtStatus" type="pdt:Reference">
+            <xsd:annotation>
+              <xsd:documentation>Indicates whether the Accounting Unit has been assigned a bad debt status by the Debt Manager process. Bad debt accounts 
+			  are those accounts which are unable to pay their liabilities back to the bank or to its lenders. The account receivables that will not be collected, 
+			  can be identified as Bad Debt Accounts. There is specific processing of the Bad Debt accounts and they need to be identified differently in comparison to 
+			  the other accounts. </xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element minOccurs="0" name="isManagedBy" type="avfpTO:OrganizationUnit_TO">
+            <xsd:annotation>
+              <xsd:documentation>Identifies the Organization Unit that has ownership and responsibility for the maintenance of the Accounting Unit.</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+        </xsd:sequence>
+      </xsd:extension>
+    </xsd:complexContent>
+  </xsd:complexType>
+  <xsd:complexType name="Arrangement_TO">
+    <xsd:annotation>
+      <xsd:documentation>Identifies a potential or actual agreement between an Organization and one or more Involved Partys that provides and affirms the rules and 
+	  obligations associated with that agreement.</xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexContent>
+      <xsd:extension base="avfpTO:BusinessModelObject_TO">
+        <xsd:sequence>
+          <xsd:element minOccurs="0" name="name" type="pdt:String">
+            <xsd:annotation>
+              <xsd:documentation>A label given to a specific Arrangement used to distinguish it from other Arrangements. </xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element maxOccurs="unbounded" minOccurs="0" name="accountingUnits" type="avfpTO:AccountingUnit_TO">
+            <xsd:annotation>
+              <xsd:documentation>The Accounting Unit(s) which records and maintains the amounts involved in business dealings based on the specifications 
+			  of the AccountArrangement.</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element minOccurs="0" name="managingOrganizationUnit" type="avfpTO:OrganizationUnit_TO">
+            <xsd:annotation>
+              <xsd:documentation>The organisation unit which is managing the registration of the Arrangement, eg an organisation unit identified by a sort code</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element minOccurs="0" name="isServicedBy" type="avfpTO:InvolvedParty_TO">
+            <xsd:annotation>
+              <xsd:documentation>Financial Institution that manages the product arrangement for a customer</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+        </xsd:sequence>
+      </xsd:extension>
+    </xsd:complexContent>
+  </xsd:complexType>
+  <xsd:complexType name="ContactPreference_TO">
+    <xsd:annotation>
+      <xsd:documentation>Identifies the characteristics related to the way a Role Player wants to be contacted. </xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexContent>
+      <xsd:extension base="avfpTO:BaseTransferObject">
+        <xsd:sequence>
+          <xsd:element maxOccurs="unbounded" minOccurs="0" name="correspondenceAddressee" type="pdt:String">
+            <xsd:annotation>
+              <xsd:documentation>The addressee text specified for use on the correspondence address. </xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element minOccurs="0" name="correspondenceDestinationPreference" type="pdt:Reference">
+            <xsd:annotation>
+              <xsd:documentation>In relation to Arrangements held by the RolePlayer, the destination preference for correspondence on that Arrangement. </xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element minOccurs="0" name="noMailIndicator" type="pdt:Boolean">
+            <xsd:annotation>
+              <xsd:documentation>Indicates whether the customer is opted for paperless communication.</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+        </xsd:sequence>
+      </xsd:extension>
+    </xsd:complexContent>
+  </xsd:complexType>
+  <xsd:complexType name="Currency_TO">
+    <xsd:complexContent>
+      <xsd:extension base="avfpTO:BaseTransferObject">
+        <xsd:sequence>
+          <xsd:element minOccurs="0" name="numberOfDecimalPlaces" type="pdt:Number"/>
+          <xsd:element minOccurs="0" name="numericCode" type="pdt:Number">
+            <xsd:annotation>
+              <xsd:documentation>The numeric code for the given currency, used when codes need to be understood in countries that do not use latin scripts</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element minOccurs="0" name="restrictedStatus" type="pdt:String">
+            <xsd:annotation>
+              <xsd:documentation>Indicates whether the currency has a restriction placed against it, for reasons like currency sanctions/controls or the
+			  currency is deemed worthless. Used by payments processing to know whether to process a payment. </xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element minOccurs="0" name="alphabeticCode" type="pdt:Reference">
+            <xsd:annotation>
+              <xsd:documentation>The alphabetic currency code for the given currency. </xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+        </xsd:sequence>
+      </xsd:extension>
+    </xsd:complexContent>
+  </xsd:complexType>
+  <xsd:complexType name="AccountArrangement_TO">
+    <xsd:annotation>
+      <xsd:documentation>Identifies a particular type of ProductArrangement in which there is an agreement between two or more Individuals, Organizations or 
+	  OrganizationUnits, that provides and affirms the rules and obligations associated with the sale, exchange, or provision of financial goods, services or 
+	  resources.An AccountArrangement is a ProductArrangement whose activities are tracked by a customer account; for example, Deposit Arrangements, 
+	  Loan Arrangements, Credit Card Arrangements.The alternative is a NonAccountArrangement which is a Product Arrangement whose activities are not tracked by a 
+	  customer account; for example, Travelers Check provision, Consulting Service.</xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexContent>
+      <xsd:extension base="avfpTO:ProductArrangement_TO"/>
+    </xsd:complexContent>
+  </xsd:complexType>
+  <xsd:complexType name="AccountSwitchingArrangement_TO">
+    <xsd:annotation>
+      <xsd:documentation>A type of Account Facility Arrangement whereby a relationship is maintained between a source AccountArrangment and a target 
+	  AccountArrangement, for a set period of time, to enable facilities such as inpayment forwarding Facilities are deteremined by the Arrangement 
+	  Switch Status</xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexContent>
+      <xsd:extension base="avfpTO:ProductArrangement_TO">
+        <xsd:sequence>
+          <xsd:element minOccurs="0" name="targetArrangement" type="avfpTO:AccountArrangement_TO">
+            <xsd:annotation>
+              <xsd:documentation>Specifies the details relating to the (new) switched to target Account Arrangement</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element minOccurs="0" name="switchTargetDate" type="pdt:Date">
+            <xsd:annotation>
+              <xsd:documentation>The target date by when it is expected that facilities such as balances, inpayments, and scheduled outpayments will be 
+			  successfully switched from the source Account Arrangement to the target Account Arrangement.  This is calculated based on the current industry 
+			  aspirational SLA for switching services.</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element maxOccurs="unbounded" minOccurs="0" name="switchStartDate" type="pdt:DateTime">
+            <xsd:annotation>
+              <xsd:documentation>The Date and Time after which an AccountSwitchingArangement is/will be in force</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+        </xsd:sequence>
+      </xsd:extension>
+    </xsd:complexContent>
+  </xsd:complexType>
+  <xsd:complexType name="ProductArrangement_TO">
+    <xsd:annotation>
+      <xsd:documentation>A Product Arrangement identifies an Arrangement between Involved Partys and the modeled organization specifying the terms by
+	  which the Involved Party obtains the use of the Products of the modeled organization.</xsd:documentation>
+    </xsd:annotation>
+    <xsd:complexContent>
+      <xsd:extension base="avfpTO:Arrangement_TO">
+        <xsd:sequence>
+          <xsd:element minOccurs="0" name="switchingStatus" type="pdt:Reference">
+            <xsd:annotation>
+              <xsd:documentation>The Status of an SwitchedAccountArrangement </xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element minOccurs="0" name="switchingArrangement" type="avfpTO:AccountSwitchingArrangement_TO">
+            <xsd:annotation>
+              <xsd:documentation>Switching arrangement that handles the account switching process</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element minOccurs="0" name="isBasedOnProduct" type="pdt:ObjectReference">
+            <xsd:annotation>
+              <xsd:documentation>The Arrangement based Product that forms the basis of a Product Arrangement</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element minOccurs="0" name="currency" type="avfpTO:Currency_TO">
+            <xsd:annotation>
+              <xsd:documentation>Base currency of the Product Arrangement, i.e. the Currency in which the accounting of transactions is done.</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+          <xsd:element maxOccurs="unbounded" minOccurs="0" name="contactPreferences" type="avfpTO:ContactPreference_TO">
+            <xsd:annotation>
+              <xsd:documentation>Identifies the contact preferences whioch relate directly to the Arrangement. Eg Statement preference information</xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+        </xsd:sequence>
+      </xsd:extension>
+    </xsd:complexContent>
+  </xsd:complexType>
+</xsd:schema>
