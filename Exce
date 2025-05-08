@@ -1,0 +1,67 @@
+package com.natwest.bankline.infrastructure.config;
+
+import com.natwest.bankline.application.exception.SchemaValidationException;
+import org.springframework.ws.soap.server.endpoint.SoapFaultMappingExceptionResolver;
+import org.springframework.ws.soap.SoapFault;
+import org.springframework.ws.soap.SoapFaultDetail;
+import org.springframework.ws.soap.SoapFaultDetailElement;
+import org.springframework.xml.namespace.QNameUtils;
+
+import javax.xml.namespace.QName;
+import java.util.Properties;
+
+/**
+ * Maps application exceptions to SOAP Faults with custom details.
+ */
+public class CustomSoapFaultResolver extends SoapFaultMappingExceptionResolver {
+
+    @Override
+    protected void customizeFault(Object endpoint, Exception ex, SoapFault fault) {
+        if (ex instanceof SchemaValidationException) {
+            fault.setFaultStringOrReason("Schema validation failed");
+
+            SoapFaultDetail detail = fault.addFaultDetail();
+            QName detailName = QNameUtils.createQName("http://com/rbsq/fault", "SchemaErrorDetail");
+            SoapFaultDetailElement detailElement = detail.addFaultDetailElement(detailName);
+            detailElement.addText(ex.getMessage());
+        }
+    }
+}
+
+
+
+
+
+-------------/-
+
+package com.natwest.bankline.infrastructure.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import java.util.Properties;
+
+/**
+ * Registers the custom exception resolver for SOAP faults.
+ */
+@Configuration
+public class SoapWebServiceConfig {
+
+    @Bean
+    public CustomSoapFaultResolver exceptionResolver() {
+        CustomSoapFaultResolver resolver = new CustomSoapFaultResolver();
+        resolver.setOrder(1);
+        resolver.setDefaultFault("Server");
+
+        // Mapping custom exceptions to SOAP fault codes
+        Properties errorMappings = new Properties();
+        errorMappings.setProperty("com.natwest.bankline.application.exception.SchemaValidationException", "Client");
+        resolver.setExceptionMappings(errorMappings);
+
+        return resolver;
+    }
+}
+
+
+
+
