@@ -1,0 +1,82 @@
+   @PayloadRoot(namespace = NAMESPACE_URI, localPart = "validateArrangementForPaymentRequest")
+    @ResponsePayload
+    public ValidateArrangementForPaymentResponse handleValidateRequest(
+            @RequestPayload ValidateArrangementForPaymentRequest request) {
+        return validationPort.validateAccount(request);
+    }
+
+
+
+
+--------------------/---/------////////
+
+package com.natwest.bankline.application.exception;
+
+/**
+ * Thrown when SOAP schema validation fails.
+ */
+public class SchemaValidationException extends RuntimeException {
+    public SchemaValidationException(String message) {
+        super(message);
+    }
+
+    public SchemaValidationException(String message, Throwable cause) {
+        super(message, cause);
+    }
+}
+
+
+
+---------------------------
+
+package com.natwest.bankline.application.service;
+
+import com.natwest.bankline.application.port.out.AccountValidationPort;
+import com.natwest.bankline.generated.ValidateArrangementForPaymentRequest;
+import com.natwest.bankline.application.exception.SchemaValidationException;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
+import org.springframework.stereotype.Service;
+
+import javax.xml.XMLConstants;
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.Marshaller;
+import javax.xml.transform.stream.StreamSource;
+import javax.xml.validation.Schema;
+import javax.xml.validation.SchemaFactory;
+import javax.xml.validation.Validator;
+import java.io.StringReader;
+import java.io.StringWriter;
+
+/**
+ * Performs schema and business logic validation.
+ */
+@Service
+public class AccountValidationService implements AccountValidationPort {
+
+    @Value("classpath:xsd/ArrValidationForPaymentParameters.xsd")
+    private Resource schemaResource;
+
+    @Override
+    public void validateSchema(ValidateArrangementForPaymentRequest request) {
+        try {
+            JAXBContext context = JAXBContext.newInstance(ValidateArrangementForPaymentRequest.class);
+            Marshaller marshaller = context.createMarshaller();
+            StringWriter writer = new StringWriter();
+            marshaller.marshal(request, writer);
+
+            SchemaFactory factory = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI);
+            Schema schema = factory.newSchema(schemaResource.getFile());
+            Validator validator = schema.newValidator();
+            validator.validate(new StreamSource(new StringReader(writer.toString())));
+
+        } catch (Exception e) {
+            throw new SchemaValidationException("Schema validation failed", e);
+        }
+    }
+
+    @Override
+    public void validateBusinessRule(ValidateArrangementForPaymentRequest request) {
+        // Placeholder
+    }
+}
