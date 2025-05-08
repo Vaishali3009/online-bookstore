@@ -1,0 +1,11 @@
+@Bean(name = "ValidateArrangementForPayment")
+public DefaultWsdl11Definition defaultWsdl11Definition(XsdSchema paymentSchema) {
+    DefaultWsdl11Definition definition = new DefaultWsdl11Definition();
+    definition.setPortTypeName("ValidateArrangementForPaymentPort");
+    definition.setLocationUri("/ws"); // Base URI where the service is exposed
+    definition.setTargetNamespace("http://com/rbsg/soa/C040PaymentManagement/ArrValidationForPayment/V01/");
+    definition.setSchema(paymentSchema); // Link to your loaded XSD
+    return definition;
+}
+
+http://localhost:8080/ws/ValidateArrangementForPayment.wsdl
