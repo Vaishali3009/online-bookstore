@@ -1,0 +1,201 @@
+package com.rbs.bdd.application.exception;
+
+public class SchemaValidationException extends RuntimeException {
+    public SchemaValidationException(String message) {
+        super(message);
+    }
+}
+
+
+
+-------//////////
+
+package com.rbs.bdd.application.port.in;
+
+import com.rbs.bdd.generated.ValidateArrangementForPaymentRequest;
+import com.rbs.bdd.generated.ValidateArrangementForPaymentResponse;
+
+public interface PaymentValidationPort {
+    ValidateArrangementForPaymentResponse validateAccountForPayment(ValidateArrangementForPaymentRequest request);
+}
+
+
+------------
+
+package com.rbs.bdd.application.port.out;
+
+import com.rbs.bdd.generated.ValidateArrangementForPaymentRequest;
+
+public interface AccountValidationPort {
+    void validateSchema(ValidateArrangementForPaymentRequest request);
+    // void validateBusinessRules(...);  // keep commented for now
+}
+
+
+
+
+-------------------
+
+
+
+package com.rbs.bdd.application.service;
+
+import com.rbs.bdd.application.port.in.PaymentValidationPort;
+import com.rbs.bdd.application.port.out.AccountValidationPort;
+import com.rbs.bdd.generated.ValidateArrangementForPaymentRequest;
+import com.rbs.bdd.generated.ValidateArrangementForPaymentResponse;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+@Service
+@RequiredArgsConstructor
+public class PaymentOrchestrator implements PaymentValidationPort {
+
+    private final AccountValidationPort accountValidationPort;
+
+    @Override
+    public ValidateArrangementForPaymentResponse validateAccountForPayment(ValidateArrangementForPaymentRequest request) {
+        accountValidationPort.validateSchema(request);
+        // accountValidationPort.validateBusinessRules(request); // Optional
+        return StaticResponseLoader.loadStaticResponse(); // Step 2
+    }
+}
+
+
+--------
+
+package com.rbs.bdd.application.service;
+
+import com.rbs.bdd.application.exception.SchemaValidationException;
+import com.rbs.bdd.application.port.out.AccountValidationPort;
+import com.rbs.bdd.generated.ValidateArrangementForPaymentRequest;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+@Service
+@RequiredArgsConstructor
+public class AccountValidationService implements AccountValidationPort {
+
+    @Override
+    public void validateSchema(ValidateArrangementForPaymentRequest request) {
+        // No need to manually validate; Spring WS handles it.
+        // Just keep for interface conformance or future custom rules
+    }
+}
+
+
+-------------
+
+
+package com.rbs.bdd.infrastructure.soap.adapter;
+
+import com.rbs.bdd.generated.ValidateArrangementForPaymentResponse;
+
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.Unmarshaller;
+import java.io.InputStream;
+
+public class StaticResponseLoader {
+
+    public static ValidateArrangementForPaymentResponse loadStaticResponse() {
+        try {
+            JAXBContext context = JAXBContext.newInstance(ValidateArrangementForPaymentResponse.class);
+            Unmarshaller unmarshaller = context.createUnmarshaller();
+            InputStream is = StaticResponseLoader.class.getResourceAsStream("/static-response/response1.xml");
+            return (ValidateArrangementForPaymentResponse) unmarshaller.unmarshal(is);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to load static SOAP response", e);
+        }
+    }
+}
+
+
+----------------
+
+package com.rbs.bdd.infrastructure.soap.adapter;
+
+import com.rbs.bdd.application.port.in.PaymentValidationPort;
+import com.rbs.bdd.generated.ValidateArrangementForPaymentRequest;
+import com.rbs.bdd.generated.ValidateArrangementForPaymentResponse;
+import lombok.RequiredArgsConstructor;
+import org.springframework.ws.server.endpoint.annotation.Endpoint;
+import org.springframework.ws.server.endpoint.annotation.PayloadRoot;
+import org.springframework.ws.server.endpoint.annotation.RequestPayload;
+import org.springframework.ws.server.endpoint.annotation.ResponsePayload;
+
+@Endpoint
+@RequiredArgsConstructor
+public class PaymentValidationSoapAdapter {
+
+    private final PaymentValidationPort validationPort;
+
+    private static final String NAMESPACE_URI = "http://com/rbsg/soa/C040PaymentManagement/ArrValidationForPayment/V01/";
+
+    @PayloadRoot(namespace = NAMESPACE_URI, localPart = "validateArrangementForPaymentRequest")
+    @ResponsePayload
+    public ValidateArrangementForPaymentResponse validateArrangement(@RequestPayload ValidateArrangementForPaymentRequest request) {
+        return validationPort.validateAccountForPayment(request);
+    }
+}
+
+----------
+
+package com.rbs.bdd.infrastructure.config;
+
+import org.springframework.boot.web.servlet.ServletRegistrationBean;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.ws.config.annotation.EnableWs;
+import org.springframework.ws.config.annotation.WsConfigurerAdapter;
+import org.springframework.ws.server.EndpointInterceptor;
+import org.springframework.ws.transport.http.MessageDispatcherServlet;
+import org.springframework.ws.wsdl.wsdl11.DefaultWsdl11Definition;
+import org.springframework.xml.xsd.SimpleXsdSchema;
+import org.springframework.xml.xsd.XsdSchema;
+import org.springframework.ws.soap.server.endpoint.interceptor.PayloadValidatingInterceptor;
+
+import java.util.List;
+
+@EnableWs
+@Configuration
+public class SoapWebServiceConfig extends WsConfigurerAdapter {
+
+    @Bean
+    public ServletRegistrationBean<MessageDispatcherServlet> messageDispatcherServlet() {
+        MessageDispatcherServlet servlet = new MessageDispatcherServlet();
+        servlet.setTransformWsdlLocations(true);
+        return new ServletRegistrationBean<>(servlet, "/soap-api/*");
+    }
+
+    @Bean(name = "validateArrangementForPayment")
+    public DefaultWsdl11Definition defaultWsdl11Definition(XsdSchema schema) {
+        DefaultWsdl11Definition wsdl = new DefaultWsdl11Definition();
+        wsdl.setPortTypeName("ValidateArrangementForPaymentPort");
+        wsdl.setLocationUri("/soap-api");
+        wsdl.setTargetNamespace("http://com/rbsg/soa/C040PaymentManagement/ArrValidationForPayment/V01/");
+        wsdl.setSchema(schema);
+        return wsdl;
+    }
+
+    @Bean
+    public XsdSchema schema() {
+        return new SimpleXsdSchema(new ClassPathResource("xsd/ArrValidationForPaymentParameters.xsd"));
+    }
+
+    @Override
+    public void addInterceptors(List<EndpointInterceptor> interceptors) {
+        PayloadValidatingInterceptor interceptor = new PayloadValidatingInterceptor();
+        interceptor.setXsdSchema(schema());
+        interceptor.setValidateRequest(true);
+        interceptor.setValidateResponse(false);
+        interceptors.add(interceptor);
+    }
+}
+
+------------
+
+
+
+
+
