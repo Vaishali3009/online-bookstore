@@ -1,0 +1,78 @@
+package com.rbs.bdd.infrastructure.config;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.ws.context.MessageContext;
+import org.springframework.ws.server.EndpointInterceptor;
+import org.springframework.ws.soap.SoapMessage;
+
+import java.io.ByteArrayOutputStream;
+
+public class SoapLoggingInterceptor implements EndpointInterceptor {
+
+    private static final Logger logger = LoggerFactory.getLogger(SoapLoggingInterceptor.class);
+
+    @Override
+    public boolean handleRequest(MessageContext messageContext, Object endpoint) {
+        logMessage("SOAP Request", messageContext.getRequest());
+        return true;
+    }
+
+    @Override
+    public boolean handleResponse(MessageContext messageContext, Object endpoint) {
+        logMessage("SOAP Response", messageContext.getResponse());
+        return true;
+    }
+
+    @Override
+    public boolean handleFault(MessageContext messageContext, Object endpoint) {
+        logMessage("SOAP Fault", messageContext.getResponse());
+        return true;
+    }
+
+    @Override
+    public void afterCompletion(MessageContext messageContext, Object endpoint, Exception ex) {
+        // No action needed
+    }
+
+    private void logMessage(String type, org.springframework.ws.WebServiceMessage message) {
+        try {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            message.writeTo(out);
+            logger.info("{}:\n{}", type, out.toString());
+        } catch (Exception e) {
+            logger.error("Error logging {} message: {}", type, e.getMessage());
+        }
+    }
+}
+
+
+
+package com.rbs.bdd.infrastructure.config;
+
+import com.rbs.bdd.generated.ValidateArrangementForPaymentResponse;
+
+import jakarta.xml.bind.JAXBContext;
+import jakarta.xml.bind.Unmarshaller;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.stereotype.Component;
+
+import java.io.InputStream;
+
+@Component
+public class StaticResponseLoader {
+
+    public ValidateArrangementForPaymentResponse loadResponse() {
+        try {
+            InputStream inputStream = new ClassPathResource("static-response/response.xml").getInputStream();
+            JAXBContext context = JAXBContext.newInstance(ValidateArrangementForPaymentResponse.class);
+            Unmarshaller unmarshaller = context.createUnmarshaller();
+            return (ValidateArrangementForPaymentResponse) unmarshaller.unmarshal(inputStream);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to load static response XML", e);
+        }
+    }
+}
+
+
+
