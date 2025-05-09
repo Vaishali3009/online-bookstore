@@ -1,0 +1,24 @@
+@Bean(name = "arrangementSchema")
+public XsdSchemaCollection arrangementSchema() {
+    CommonsXsdSchemaCollection schemaCollection = new CommonsXsdSchemaCollection(
+            new ClassPathResource("xsd/ArrValidationForPaymentParameters.xsd"),
+            new ClassPathResource("xsd/ArrValidationForPaymentTransferObjects.xsd"),
+            new ClassPathResource("xsd/PrimitiveDatatypes.xsd"),
+            new ClassPathResource("xsd/ServiceDefinitions.xsd")
+    );
+    schemaCollection.setInline(true); // Required to merge all
+    return schemaCollection;
+}
+
+
+
+
+@Bean(name = "validateArrangementForPayment")
+public DefaultWsdl11Definition defaultWsdl11Definition(@Qualifier("arrangementSchema") XsdSchemaCollection schemaCollection) {
+    DefaultWsdl11Definition definition = new DefaultWsdl11Definition();
+    definition.setPortTypeName("ValidateArrangementForPaymentPort");
+    definition.setLocationUri("/ws");
+    definition.setTargetNamespace("http://com/rbsg/soa/C040PaymentManagement/ArrValidationForPayment/V01/");
+    definition.setSchemaCollection(schemaCollection);
+    return definition;
+}
