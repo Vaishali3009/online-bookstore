@@ -1,0 +1,11 @@
+    @Bean(name = "validateArrangementForPayment")
+    public DefaultWsdl11Definition validateArrangementWsdl(XsdSchema arrangementSchema) {
+        DefaultWsdl11Definition wsdl11Definition = new DefaultWsdl11Definition();
+        wsdl11Definition.setPortTypeName("ValidateArrangementForPaymentPort");
+        wsdl11Definition.setLocationUri("/ws");
+        wsdl11Definition.setTargetNamespace("http://com/rbsg/soa/C040PaymentManagement/ArrValidationForPayment/V01/");
+        wsdl11Definition.setSchema(arrangementSchema);
+        return wsdl11Definition;
+    }
+
+ 
