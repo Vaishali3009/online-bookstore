@@ -1,0 +1,11 @@
+<dependency>
+    <groupId>org.springframework.ws</groupId>
+    <artifactId>spring-xml</artifactId>
+    <version>4.0.12.RELEASE</version>
+    <exclusions>
+        <exclusion>
+            <groupId>org.apache.ws.commons.schema</groupId>
+            <artifactId>XmlSchema</artifactId>
+        </exclusion>
+    </exclusions>
+</dependency>
