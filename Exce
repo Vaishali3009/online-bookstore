@@ -1,25 +1,74 @@
-package com.rbs.bdd.application.service;
+package com.rbs.bdd.infrastructure.soap.model;
 
+import com.rbs.bdd.generated.ValidateArrangementForPaymentResponse;
+
+import javax.xml.bind.annotation.*;
+
+@XmlRootElement(name = "Envelope", namespace = "http://schemas.xmlsoap.org/soap/envelope/")
+@XmlAccessorType(XmlAccessType.FIELD)
+public class Envelope {
+
+    @XmlElement(name = "Body", namespace = "http://schemas.xmlsoap.org/soap/envelope/")
+    private Body body;
+
+    public Body getBody() {
+        return body;
+    }
+
+    public void setBody(Body body) {
+        this.body = body;
+    }
+}
+
+
+-------------------
+
+
+package com.rbs.bdd.infrastructure.soap.model;
+
+import com.rbs.bdd.generated.ValidateArrangementForPaymentResponse;
+
+import javax.xml.bind.annotation.*;
+
+@XmlAccessorType(XmlAccessType.FIELD)
+@XmlType(name = "", propOrder = {"validateArrangementForPaymentResponse"})
+public class Body {
+
+    @XmlElement(name = "validateArrangementForPaymentResponse",
+            namespace = "http://com/rbsg/soa/C040PaymentManagement/ArrValidationForPayment/V01/")
+    private ValidateArrangementForPaymentResponse validateArrangementForPaymentResponse;
+
+    public ValidateArrangementForPaymentResponse getValidateArrangementForPaymentResponse() {
+        return validateArrangementForPaymentResponse;
+    }
+
+    public void setValidateArrangementForPaymentResponse(ValidateArrangementForPaymentResponse response) {
+        this.validateArrangementForPaymentResponse = response;
+    }
+}
+
+
+--------------/
+
+
+
+package com.rbs.bdd.application.service;
 
 import com.rbs.bdd.application.exception.SchemaValidationException;
 import com.rbs.bdd.application.port.out.AccountValidationPort;
 import com.rbs.bdd.generated.*;
 import com.rbs.bdd.infrastructure.soap.model.Envelope;
 import jakarta.xml.bind.JAXBContext;
-import jakarta.xml.bind.JAXBElement;
 import jakarta.xml.bind.Marshaller;
 import jakarta.xml.bind.Unmarshaller;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-
 import javax.xml.transform.Source;
 import javax.xml.transform.stream.StreamSource;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.FileNotFoundException;
 import java.io.InputStream;
-import java.lang.Exception;
 
 @Service
 @RequiredArgsConstructor
@@ -27,67 +76,52 @@ public class AccountValidationService implements AccountValidationPort {
 
     @Override
     public void validateSchema(ValidateArrangementForPaymentRequest request) {
-        // Schema is validated automatically by Spring WS
-        System.out.println("Schema Validation ");
+        System.out.println("Schema validation triggered (handled by Spring WS interceptor)");
     }
 
-
-    /** Working
     @Override
-    public ValidateArrangementForPaymentResponse validateBusinessRules(ValidateArrangementForPaymentRequest request) {
+    public Source validateBusinessRules(ValidateArrangementForPaymentRequest request) {
         try {
-            System.out.println("Process started for business logic");
-
-            // Create JAXB context for the envelope wrapper class
             JAXBContext context = JAXBContext.newInstance(Envelope.class);
             Unmarshaller unmarshaller = context.createUnmarshaller();
+            InputStream xml = getClass().getClassLoader().getResourceAsStream("static-response/response.xml");
 
-            // Load the static SOAP response
-            InputStream xml = getClass().getClassLoader().getResourceAsStream("static-response/response1.xml");
             if (xml == null) {
-                throw new FileNotFoundException("File static-response/response1.xml not found.");
+                throw new SchemaValidationException("Missing static SOAP response XML.");
             }
 
-            // Unmarshal the full SOAP envelope
             Envelope envelope = (Envelope) unmarshaller.unmarshal(xml);
-            if(envelope==null || envelope.getBody()==null)
-            {
-                throw new SchemaValidationException("SOAP envelope or body is null");
 
+            if (envelope == null || envelope.getBody() == null || envelope.getBody().getValidateArrangementForPaymentResponse() == null) {
+                throw new SchemaValidationException("Envelope or response body is null.");
             }
+
             ValidateArrangementForPaymentResponse response = envelope.getBody().getValidateArrangementForPaymentResponse();
+            ResponseHeader header = response.getResponse().getResponseHeader();
 
-            if(response==null)
-            {
-                throw new SchemaValidationException("SOAP envelope or body is null");
-
-            }
-            ValidateArrangementForPaymentContent content=response.getResponse();
-            if(content ==null)
-            {
-                throw new SchemaValidationException("SOAP envelope or body is null");
-
-            }
-            ResponseHeader header= content.getResponseHeader();
-
-            // Business logic
-            String operatingBrand = request.getRequestHeader().getOperatingBrand();
-            if ("ALL".equalsIgnoreCase(operatingBrand)) {
-                ProcessingIdentifier responseId= header.getResponseId();
-                if(responseId==null)
-                {
-                   responseId= new ProcessingIdentifier();
-                   header.setResponseId(responseId);
-
+            if ("ALL".equalsIgnoreCase(request.getRequestHeader().getOperatingBrand())) {
+                ProcessingIdentifier id = header.getResponseId();
+                if (id == null) {
+                    id = new ProcessingIdentifier();
+                    header.setResponseId(id);
                 }
-                responseId.setSystemId("ModifiedESP");
-                responseId.setTransactionId("ModifiedTxn123");
-
+                id.setSystemId("ModifiedESP");
+                id.setTransactionId("ModifiedTxn123");
             }
 
-            return response;
+            // Marshal modified envelope back to Source
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            Marshaller marshaller = context.createMarshaller();
+            marshaller.marshal(envelope, output);
+
+            return new StreamSource(new ByteArrayInputStream(output.toByteArray()));
         } catch (Exception e) {
-            throw new SchemaValidationException("Failed to process static response XML", e);
+            throw new SchemaValidationException("Failed to process SOAP business response", e);
         }
     }
-    **/
+}
+
+
+
+
+
