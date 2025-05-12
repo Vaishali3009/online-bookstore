@@ -1,0 +1,33 @@
+@Override
+public InputStream validateBusinessRules(ValidateArrangementForPaymentRequest request) {
+    try {
+        JAXBContext context = JAXBContext.newInstance(Envelope.class);
+        Unmarshaller unmarshaller = context.createUnmarshaller();
+        Marshaller marshaller = context.createMarshaller();
+
+        InputStream is = getClass().getClassLoader().getResourceAsStream("static-response/response1.xml");
+        Envelope envelope = (Envelope) unmarshaller.unmarshal(is);
+
+        // Modify fields based on request
+        ValidateArrangementForPaymentResponse response = envelope.getBody().getValidateArrangementForPaymentResponse();
+        String brand = request.getRequestHeader().getOperatingBrand();
+        if ("ALL".equalsIgnoreCase(brand)) {
+            ResponseHeader header = response.getResponse().getResponseHeader();
+            ProcessingIdentifier id = header.getResponseId();
+            if (id == null) {
+                id = new ProcessingIdentifier();
+                header.setResponseId(id);
+            }
+            id.setSystemId("ModifiedESP");
+            id.setTransactionId("ModifiedTxn123");
+        }
+
+        // Marshal back to a ByteArrayInputStream to return full XML
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        marshaller.marshal(envelope, baos);
+        return new ByteArrayInputStream(baos.toByteArray());
+
+    } catch (Exception e) {
+        throw new RuntimeException("Failed to process static response", e);
+    }
+}
