@@ -1,87 +1,718 @@
 package com.rbs.bdd.application.service;
 
-import com.rbs.bdd.generated.ValidateArrangementForPaymentRequest;
+
 import com.rbs.bdd.application.exception.SchemaValidationException;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import com.rbs.bdd.application.port.out.AccountValidationPort;
+import com.rbs.bdd.generated.*;
+import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
 import org.springframework.ws.WebServiceMessage;
 import org.springframework.ws.soap.saaj.SaajSoapMessage;
+import org.w3c.dom.Document;
+import org.w3c.dom.Node;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
+import javax.xml.transform.stream.StreamSource;
+import javax.xml.xpath.XPath;
+import javax.xml.xpath.XPathConstants;
+import javax.xml.xpath.XPathFactory;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.lang.Exception;
 
-import javax.xml.bind.JAXBContext;
-import javax.xml.bind.Unmarshaller;
-import javax.xml.soap.MessageFactory;
-import javax.xml.soap.SOAPMessage;
-import java.io.File;
-import java.io.FileInputStream;
 
-import static org.junit.jupiter.api.Assertions.*;
+/**
+ * Service class responsible for validating SOAP request schema and applying business rules to static XML response.
+ */
+@Service
+@RequiredArgsConstructor
+public class AccountValidationService implements AccountValidationPort {
 
-class AccountValidationServiceTest {
+    private static final Logger logger = LoggerFactory.getLogger(AccountValidationService.class);
 
-    private AccountValidationService accountValidationService;
 
-    @BeforeEach
-    void setUp() {
-        accountValidationService = new AccountValidationService();
+    /**
+     * Automatically validates the request schema via Spring WS's interceptor.
+     */
+    @Override
+    public void validateSchema(ValidateArrangementForPaymentRequest request) {
+        logger.info("Schema validation completed (Spring WS handles XSD check)");
     }
 
     /**
-     * Loads and unmarshals static-request.xml into ValidateArrangementForPaymentRequest.
+     * Applies business rules to a static SOAP response XML file, modifies specific fields using DOM/XPath,
+     * and writes the transformed XML directly to the outgoing SOAP message.
+     *
+     * @param request SOAP request containing operating brand
+     * @param message Outgoing SOAP response to be written with modified static content
      */
-    private ValidateArrangementForPaymentRequest loadRequestFromXml() throws Exception {
-        File file = new File("src/test/resources/static-request/static-request.xml");
-        JAXBContext context = JAXBContext.newInstance(ValidateArrangementForPaymentRequest.class);
-        Unmarshaller unmarshaller = context.createUnmarshaller();
-        return (ValidateArrangementForPaymentRequest) unmarshaller.unmarshal(new FileInputStream(file));
-    }
+        @Override
+        public void validateBusinessRules(ValidateArrangementForPaymentRequest request, WebServiceMessage message) {
+            try {
+                logger.info("Starting business rule processing for operating brand: {}", request.getRequestHeader().getOperatingBrand());
 
-    /**
-     * Creates an empty SOAP message used for validating the response injection.
-     */
-    private WebServiceMessage createEmptySoapMessage() {
-        try {
-            SOAPMessage soapMessage = MessageFactory.newInstance().createMessage();
-            return new SaajSoapMessage(soapMessage);
-        } catch (Exception e) {
-            throw new RuntimeException("Unable to create SOAP message", e);
+                InputStream xml = getClass().getClassLoader().getResourceAsStream("static-response/response1.xml");
+                if (xml == null) {
+                    throw new SchemaValidationException("response1.xml not found in classpath");
+                }
+
+                DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+                factory.setNamespaceAware(true);
+                DocumentBuilder builder = factory.newDocumentBuilder();
+                Document doc = builder.parse(xml);
+
+                XPath xpath = XPathFactory.newInstance().newXPath();
+
+                // Update systemId
+                Node systemId = (Node) xpath.evaluate(
+                        "//*[local-name()='responseId']/*[local-name()='systemId']", doc, XPathConstants.NODE);
+                if (systemId != null) {
+                    systemId.setTextContent("ModifiedESP");
+                    logger.debug("Updated systemId");
+                };
+
+                // Update transactionId
+                Node transactionId = (Node) xpath.evaluate(
+                        "//*[local-name()='responseId']/*[local-name()='transactionId']", doc, XPathConstants.NODE);
+                if (transactionId != null)
+                {
+                    transactionId.setTextContent("ModifiedTxn123");
+                    logger.debug("Updated transactionId");
+                }
+
+                ByteArrayOutputStream rawOutput= new ByteArrayOutputStream();
+                Transformer transformer = TransformerFactory.newInstance().newTransformer();
+                transformer.transform(new DOMSource(doc),new StreamResult(rawOutput));
+
+
+                SaajSoapMessage soapMessage= (SaajSoapMessage) message;
+                soapMessage.getSaajMessage().getSOAPPart().setContent(
+                        new StreamSource(new ByteArrayInputStream(rawOutput.toByteArray()))
+                );
+                logger.info("SOAP response dynamically written from static XML template.");
+            } catch (Exception e) {
+                logger.error("Exception while processing business logic: {}", e.getMessage(), e);
+                throw new SchemaValidationException("Error processing response XML", e);
+            }
         }
     }
 
-    @Test
-    void testValidateSchemaShouldPass() throws Exception {
-        ValidateArrangementForPaymentRequest request = loadRequestFromXml();
-        assertDoesNotThrow(() -> accountValidationService.validateSchema(request));
+----------------------------------------
+
+
+package com.rbs.bdd.application.port.out;
+
+import com.rbs.bdd.generated.ValidateArrangementForPaymentRequest;
+import org.springframework.ws.WebServiceMessage;
+
+/**
+ * Defines the business contract for validating payment accounts.
+ * Used by the orchestrator to call schema and business rule validators.
+ */
+public interface AccountValidationPort {
+    /**
+     * Performs XSD schema validation of the request. (Currently delegated to Spring WS config.)
+     *
+     * @param request The SOAP request payload.
+     */
+    void validateSchema(ValidateArrangementForPaymentRequest request);
+
+
+    /**
+     * Applies business rules on the static response XML based on request content,
+     * and writes the final SOAP response directly to the output message.
+     *
+     * @param request The incoming SOAP request.
+     * @param message The WebServiceMessage to write the modified response to.
+     */
+    void validateBusinessRules(ValidateArrangementForPaymentRequest request,WebServiceMessage message);
+
+     }
+
+
+---------------------------------
+
+package com.rbs.bdd.application.service;
+
+
+import com.rbs.bdd.application.exception.SchemaValidationException;
+import com.rbs.bdd.application.port.out.AccountValidationPort;
+import com.rbs.bdd.generated.*;
+import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.ws.WebServiceMessage;
+import org.springframework.ws.soap.saaj.SaajSoapMessage;
+import org.w3c.dom.Document;
+import org.w3c.dom.Node;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
+import javax.xml.transform.stream.StreamSource;
+import javax.xml.xpath.XPath;
+import javax.xml.xpath.XPathConstants;
+import javax.xml.xpath.XPathFactory;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.lang.Exception;
+
+
+/**
+ * Service class responsible for validating SOAP request schema and applying business rules to static XML response.
+ */
+@Service
+@RequiredArgsConstructor
+public class AccountValidationService implements AccountValidationPort {
+
+    private static final Logger logger = LoggerFactory.getLogger(AccountValidationService.class);
+
+
+    /**
+     * Automatically validates the request schema via Spring WS's interceptor.
+     */
+    @Override
+    public void validateSchema(ValidateArrangementForPaymentRequest request) {
+        logger.info("Schema validation completed (Spring WS handles XSD check)");
     }
 
-    @Test
-    void testValidateBusinessRulesShouldModifySoapMessage() throws Exception {
-        ValidateArrangementForPaymentRequest request = loadRequestFromXml();
-        WebServiceMessage message = createEmptySoapMessage();
+    /**
+     * Applies business rules to a static SOAP response XML file, modifies specific fields using DOM/XPath,
+     * and writes the transformed XML directly to the outgoing SOAP message.
+     *
+     * @param request SOAP request containing operating brand
+     * @param message Outgoing SOAP response to be written with modified static content
+     */
+        @Override
+        public void validateBusinessRules(ValidateArrangementForPaymentRequest request, WebServiceMessage message) {
+            try {
+                logger.info("Starting business rule processing for operating brand: {}", request.getRequestHeader().getOperatingBrand());
 
-        assertDoesNotThrow(() -> accountValidationService.validateBusinessRules(request, message));
+                InputStream xml = getClass().getClassLoader().getResourceAsStream("static-response/response1.xml");
+                if (xml == null) {
+                    throw new SchemaValidationException("response1.xml not found in classpath");
+                }
 
-        // Optional: Add assertion logic to inspect the modified SOAP message
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        message.writeTo(outputStream);
-        String soapContent = outputStream.toString();
+                DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+                factory.setNamespaceAware(true);
+                DocumentBuilder builder = factory.newDocumentBuilder();
+                Document doc = builder.parse(xml);
 
-        assertTrue(soapContent.contains("ModifiedESP"));
-        assertTrue(soapContent.contains("ModifiedTxn123"));
-    }
+                XPath xpath = XPathFactory.newInstance().newXPath();
 
-    @Test
-    void testValidateBusinessRulesWithMissingXmlThrowsException() {
-        AccountValidationService brokenService = new AccountValidationService() {
-            @Override
-            public void validateBusinessRules(ValidateArrangementForPaymentRequest request, WebServiceMessage message) {
-                throw new SchemaValidationException("response1.xml not found in classpath");
+                // Update systemId
+                Node systemId = (Node) xpath.evaluate(
+                        "//*[local-name()='responseId']/*[local-name()='systemId']", doc, XPathConstants.NODE);
+                if (systemId != null) {
+                    systemId.setTextContent("ModifiedESP");
+                    logger.debug("Updated systemId");
+                };
+
+                // Update transactionId
+                Node transactionId = (Node) xpath.evaluate(
+                        "//*[local-name()='responseId']/*[local-name()='transactionId']", doc, XPathConstants.NODE);
+                if (transactionId != null)
+                {
+                    transactionId.setTextContent("ModifiedTxn123");
+                    logger.debug("Updated transactionId");
+                }
+
+                ByteArrayOutputStream rawOutput= new ByteArrayOutputStream();
+                Transformer transformer = TransformerFactory.newInstance().newTransformer();
+                transformer.transform(new DOMSource(doc),new StreamResult(rawOutput));
+
+
+                SaajSoapMessage soapMessage= (SaajSoapMessage) message;
+                soapMessage.getSaajMessage().getSOAPPart().setContent(
+                        new StreamSource(new ByteArrayInputStream(rawOutput.toByteArray()))
+                );
+                logger.info("SOAP response dynamically written from static XML template.");
+            } catch (Exception e) {
+                logger.error("Exception while processing business logic: {}", e.getMessage(), e);
+                throw new SchemaValidationException("Error processing response XML", e);
             }
-        };
+        }
+    }
 
-        WebServiceMessage message = createEmptySoapMessage();
-        ValidateArrangementForPaymentRequest request = new ValidateArrangementForPaymentRequest();
 
-        assertThrows(SchemaValidationException.class, () ->
-                brokenService.validateBusinessRules(request, message));
+
+-----------------------------
+
+package com.rbs.bdd.application.service;
+
+import com.rbs.bdd.application.port.out.AccountValidationPort;
+import com.rbs.bdd.application.port.in.PaymentValidationPort;
+import com.rbs.bdd.generated.ValidateArrangementForPaymentRequest;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.ws.WebServiceMessage;
+
+/**
+ * Service class responsible for orchestrating the validation flow of payment arrangement requests.
+ * Implements {@link PaymentValidationPort} and delegates schema and business rule validation
+ * to the appropriate output port.
+ */
+@Service
+@RequiredArgsConstructor
+public class PaymentOrchestrator implements PaymentValidationPort {
+
+    private final AccountValidationPort accountValidationPort;
+
+
+     /* private final CustomerRetrievalService customerRetrievalService;
+
+   @Override
+    public RetrieveCustomerResponse retrieveCustomer(RetrieveCustomerRequest request) {
+        return customerRetrievalService.retrieveCustomer(request);
+    }*/
+
+    /**
+     * Entry point for handling the SOAP request. Validates schema and applies business rules.
+     *
+     * @param request the incoming SOAP request payload
+     * @param message the SOAP WebServiceMessage used to write the final response
+     */
+    @Override
+    public void validateArrangementForPayment(ValidateArrangementForPaymentRequest request,WebServiceMessage message) {
+        accountValidationPort.validateSchema(request); // automatic validation through interceptors
+         accountValidationPort.validateBusinessRules(request,message);
+    }
+
+}
+
+-----------------------------------------
+
+package com.rbs.bdd.infrastructure.config;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.ws.context.MessageContext;
+import org.springframework.ws.server.EndpointInterceptor;
+
+import java.io.ByteArrayOutputStream;
+
+public class SoapLoggingInterceptor implements EndpointInterceptor {
+
+    private static final Logger logger = LoggerFactory.getLogger(SoapLoggingInterceptor.class);
+
+    @Override
+    public boolean handleRequest(MessageContext messageContext, Object endpoint) {
+        logMessage("SOAP Request", messageContext.getRequest());
+        return true;
+    }
+
+    @Override
+    public boolean handleResponse(MessageContext messageContext, Object endpoint) {
+        logMessage("SOAP Response", messageContext.getResponse());
+        return true;
+    }
+
+    @Override
+    public boolean handleFault(MessageContext messageContext, Object endpoint) {
+        logMessage("SOAP Fault", messageContext.getResponse());
+        return true;
+    }
+
+    @Override
+    public void afterCompletion(MessageContext messageContext, Object endpoint, Exception ex) {
+        // No action needed
+    }
+
+    private void logMessage(String type, org.springframework.ws.WebServiceMessage message) {
+        try {
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            message.writeTo(out);
+            logger.info("{}:\n{}", type, out.toString());
+        } catch (Exception e) {
+            logger.error("Error logging {} message: {}", type, e.getMessage());
+        }
     }
 }
+
+----------
+
+
+package com.rbs.bdd.infrastructure.config;
+
+
+import org.springframework.boot.web.servlet.ServletRegistrationBean;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.ws.config.annotation.EnableWs;
+import org.springframework.ws.config.annotation.WsConfigurerAdapter;
+import org.springframework.ws.server.EndpointInterceptor;
+import org.springframework.ws.soap.server.endpoint.interceptor.PayloadValidatingInterceptor;
+import org.springframework.ws.transport.http.MessageDispatcherServlet;
+import org.springframework.ws.wsdl.wsdl11.DefaultWsdl11Definition;
+import org.springframework.xml.xsd.commons.CommonsXsdSchemaCollection;
+import org.springframework.xml.xsd.XsdSchemaCollection;
+import java.util.List;
+
+/**
+ * Configuration class for setting up Spring WS infrastructure, including schema validation
+ * and WSDL exposure. Implements {@link WsConfigurerAdapter}.
+ */
+@Configuration
+@EnableWs
+public class SoapWebServiceConfig extends WsConfigurerAdapter {
+
+    /**
+     * Registers the Spring WS {@link MessageDispatcherServlet}.
+     *
+     * @param context Spring ApplicationContext
+     * @return ServletRegistrationBean for MessageDispatcherServlet
+     */
+    @Bean
+    public ServletRegistrationBean<MessageDispatcherServlet> messageDispatcherServlet(ApplicationContext context) {
+        MessageDispatcherServlet servlet = new MessageDispatcherServlet();
+        servlet.setApplicationContext(context);
+        servlet.setTransformWsdlLocations(true);
+        return new ServletRegistrationBean<>(servlet, "/ws/*");
+    }
+
+
+    /**
+     * Adds a schema validating interceptor to validate all incoming requests.
+     *
+     * @param interceptors list of Spring WS endpoint interceptors
+     */
+    @Override
+    public void addInterceptors(List<EndpointInterceptor> interceptors) {
+        PayloadValidatingInterceptor validatingInterceptor = new PayloadValidatingInterceptor();
+        validatingInterceptor.setValidateRequest(true);
+        validatingInterceptor.setValidateResponse(false);
+        try {
+            validatingInterceptor.setXsdSchemaCollection(updateContactXsd());
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        interceptors.add(validatingInterceptor);
+    }
+
+
+    /**
+     * Publishes the WSDL based on the XSD schema.
+     *
+     * @return DefaultWsdl11Definition for WSDL exposure
+     * @throws Exception if schema loading fails
+     */
+    @Bean(name="ArrValidationForPaymentParameters")
+    public DefaultWsdl11Definition defaultWsdl11Definition() throws Exception {
+        DefaultWsdl11Definition wsdl11Definition = new DefaultWsdl11Definition();
+        wsdl11Definition.setPortTypeName("IArrValidationForPayment");
+        wsdl11Definition.setLocationUri("/ws");
+       // wsdl11Definition.setTargetNamespace("http://com/rbsg/soa/C040PaymentManagement/ArrValidationForPayment/V01/ServiceParameters/V01/");
+        wsdl11Definition.setTargetNamespace("http://com/rbsg/soa/C040PaymentManagement/ArrValidationForPayment/V01/");
+        wsdl11Definition.setSchemaCollection(updateContactXsd());
+        return wsdl11Definition;
+    }
+
+
+    /**
+     * Loads and inlines the XSD schema used for validating SOAP requests.
+     *
+     * @return XsdSchemaCollection of all relevant XSDs
+     * @throws Exception if schema loading fails
+     */
+    @Bean
+    public XsdSchemaCollection updateContactXsd() throws Exception {
+        CommonsXsdSchemaCollection xsd = new CommonsXsdSchemaCollection(new ClassPathResource("xsd/ArrValidationForPaymentParameters.xsd"));
+        xsd.setInline(true);
+        return xsd;
+    }
+}
+
+
+---------------------------------
+package com.rbs.bdd.infrastructure.soap.api;
+
+import com.rbs.bdd.application.port.in.PaymentValidationPort;
+import com.rbs.bdd.generated.ValidateArrangementForPaymentRequest;
+import org.springframework.ws.WebServiceMessage;
+import org.springframework.ws.context.MessageContext;
+import org.springframework.ws.server.endpoint.annotation.Endpoint;
+import org.springframework.ws.server.endpoint.annotation.PayloadRoot;
+import org.springframework.ws.server.endpoint.annotation.RequestPayload;
+import org.springframework.ws.server.endpoint.annotation.ResponsePayload;
+
+
+/**
+ * SOAP endpoint adapter class for handling the `validateArrangementForPayment` operation.
+ * It uses Spring WS annotations to route incoming SOAP requests to the appropriate service layer.
+ */
+@Endpoint
+public class PaymentValidationSoapAdapter {
+
+    /**Changes for the request*/
+   // private static final String NAMESPACE_URI = "http://com/rbsg/soa/C040PaymentManagement/ArrValidationForPayment/V01/ServiceParameters/V01/";
+
+    private static final String NAMESPACE_URI = "http://com/rbsg/soa/C040PaymentManagement/ArrValidationForPayment/V01/";
+    private final PaymentValidationPort paymentValidationPort;
+
+    /**
+     * Constructor-based injection of the orchestrator that handles business logic.
+     *
+     * @param paymentValidationPort the orchestrator service
+     */
+    public PaymentValidationSoapAdapter(PaymentValidationPort paymentValidationPort) {
+        this.paymentValidationPort = paymentValidationPort;
+    }
+
+    /**
+     * Handles the `validateArrangementForPayment` SOAP request.
+     * Delegates request processing to the orchestrator which modifies the response message directly.
+     *
+     * @param request the SOAP request payload
+     * @param context the Spring WS message context
+     */
+    @PayloadRoot(namespace = NAMESPACE_URI, localPart = "validateArrangementForPayment")
+    @ResponsePayload
+    public void validateArrangementForPayment(@RequestPayload ValidateArrangementForPaymentRequest request,
+                                                MessageContext context) {
+
+        WebServiceMessage response = context.getResponse();
+        paymentValidationPort.validateArrangementForPayment(request, response);
+         }
+
+}
+
+
+
+
+----------------------------
+
+
+package com.rbs.bdd.util;
+
+import com.rbs.bdd.generated.ValidateArrangementForPaymentResponse;
+import jakarta.xml.bind.JAXBContext;
+import jakarta.xml.bind.Unmarshaller;
+
+import java.io.InputStream;
+
+public class XmlUtil {
+
+    public static ValidateArrangementForPaymentResponse loadStaticResponse() {
+        try {
+            JAXBContext context = JAXBContext.newInstance(ValidateArrangementForPaymentResponse.class);
+            Unmarshaller unmarshaller = context.createUnmarshaller();
+            InputStream is = XmlUtil.class.getClassLoader().getResourceAsStream("static-response/response.xml");
+            return (ValidateArrangementForPaymentResponse) unmarshaller.unmarshal(is);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to load static SOAP response", e);
+        }
+    }
+}
+
+
+---------------------------
+
+Static request.xml   placed in src->main->test-resources->static-request->static-request..xml
+
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:v01="http://com/rbsg/soa/C040PaymentManagement/ArrValidationForPayment/V01/">
+   <soapenv:Header/>
+   <soapenv:Body>
+      <v01:validateArrangementForPayment>
+         <requestHeader>
+            <operatingBrand>ALL</operatingBrand>
+            <!--Zero or more repetitions:-->
+            <requestIds>
+               <systemId>RequestID</systemId>
+               <transactionId>123456789</transactionId>
+            </requestIds>
+            <cmdType>Request</cmdType>
+         </requestHeader>
+         <arrangementIdentifier>
+            <identifier>GB79RBOS16005812345670</identifier>
+            <context>
+               <schemeName>ArrangementEnterpriseIdType</schemeName>
+               <codeValue>InternationalBankAccountNumber</codeValue>
+            </context>
+         </arrangementIdentifier>
+      </v01:validateArrangementForPayment>
+   </soapenv:Body>
+</soapenv:Envelope>
+
+-----------------------------------------
+
+static-response.xml placed in src->main->java-resources->static-response->response1.xml
+
+
+<NS1:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:pdt="http://com/rbsg/soa/DataTypes/PrimitiveDataTypes/V03/"
+              xmlns:NS1="http://schemas.xmlsoap.org/soap/envelope/">
+   <NS1:Body>
+      <NS2:validateArrangementForPaymentResponse
+              xmlns:NS2="http://com/rbsg/soa/C040PaymentManagement/ArrValidationForPayment/V01/">
+         <response>
+            <responseHeader>
+               <responseId>
+                  <systemId>ESP</systemId>
+                  <transactionId>3flS1c3fdecbf61bad42301f4e4d720211216055235691h</transactionId>
+               </responseId>
+               <operatingBrand>NWB</operatingBrand>
+               <refRequestIds>
+                  <systemId>RequestID</systemId>
+                  <transactionId>123456789</transactionId>
+               </refRequestIds>
+               <cmdType>Response</cmdType>
+               <cmdStatus>Succeeded</cmdStatus>
+               <cmdNotifications>
+                  <returnCode>0</returnCode>
+                  <category>Success</category>
+                  <description>Success</description>
+                  <systemNotifications>
+                     <returnCode>00</returnCode>
+                     <category>Success</category>
+                     <description>Success</description>
+                     <processingId>
+                        <systemId>International</systemId>
+                     </processingId>
+                  </systemNotifications>
+                  <systemNotifications>
+                     <returnCode>0</returnCode>
+                     <category>Success</category>
+                     <description>Success</description>
+                     <processingId>
+                        <systemId>BPP</systemId>
+                     </processingId>
+                  </systemNotifications>
+               </cmdNotifications>
+            </responseHeader>
+            <validatedArrangement>
+               <alternativeIdentifier>
+                  <identifier>NXBJDGHFUSD01</identifier>
+                  <context>
+                     <schemeName>ArrangementEnterpriseIdType</schemeName>
+                     <codeValue>InternationalCustomerAccountNumber</codeValue>
+                  </context>
+               </alternativeIdentifier>
+               <alternativeIdentifier>
+                  <identifier>1400104057015</identifier>
+                  <context>
+                     <schemeName>ArrangementEnterpriseIdType</schemeName>
+                     <codeValue>IMMAS</codeValue>
+                  </context>
+               </alternativeIdentifier>
+               <universalUniqueIdentifier>
+                  <identifier>60730104057015</identifier>
+                  <context>
+                     <schemeName>ArrangementEnterpriseIdType</schemeName>
+                     <codeValue>UKBasicBankAccountNumber</codeValue>
+                  </context>
+               </universalUniqueIdentifier>
+               <name>VUWDL LFTN EWO UBI I/S</name>
+               <accountingUnits>
+                  <status>
+                     <schemeName>AccountingUnitStatus</schemeName>
+                     <codeValue>International - Unrestricted</codeValue>
+                  </status>
+               </accountingUnits>
+               <managingOrganizationUnit>
+                  <hasForName>
+                     <nameText>NWB NON EURO/STERLING IBAN S/CODE</nameText>
+                  </hasForName>
+                  <parentOrganization>
+                     <alternativeIdentifier>
+                        <identifier>278</identifier>
+                        <context>
+                           <schemeName>OrganizationEnterpriseIdType</schemeName>
+                           <codeValue>BankIdentifier</codeValue>
+                        </context>
+                        <extendedProperties xsi:type="pdt:Property">
+                           <string>NAT WEST BANK PLC</string>
+                           <name>BankShortName</name>
+                        </extendedProperties>
+                     </alternativeIdentifier>
+                     <hasForName>
+                        <nameText>NATIONAL WESTMINSTER BANK PLC</nameText>
+                     </hasForName>
+                     <parentOrganization>
+                        <alternativeIdentifier>
+                           <identifier>N</identifier>
+                           <context>
+                              <schemeName>OrganizationEnterpriseIdType</schemeName>
+                              <codeValue>InstanceIdentifier</codeValue>
+                           </context>
+                        </alternativeIdentifier>
+                     </parentOrganization>
+                  </parentOrganization>
+                  <sortCodeRegistration>
+                     <extendedProperties>
+                        <string>N</string>
+                        <name>EuroSortcode</name>
+                     </extendedProperties>
+                     <lifeCycleStatus>
+                        <status>
+                           <schemeName>RegistrationLifecycleStatus</schemeName>
+                           <codeValue>Effective</codeValue>
+                        </status>
+                     </lifeCycleStatus>
+                     <isIssuedIn>
+                        <universalUniqueIdentifier>
+                           <identifier>Mainland GB</identifier>
+                           <context>
+                              <schemeName>GeographicAreaType</schemeName>
+                              <codeValue>Region</codeValue>
+                           </context>
+                        </universalUniqueIdentifier>
+                     </isIssuedIn>
+                     <isTrainingBranch>false</isTrainingBranch>
+                     <sortCodeRegistrationType>
+                        <schemeName>SortCodeRegistrationType</schemeName>
+                        <codeValue>None</codeValue>
+                     </sortCodeRegistrationType>
+                     <paymentServicesProviderType>
+                        <schemeName>PaymentServicesProviderType</schemeName>
+                        <codeValue>External</codeValue>
+                     </paymentServicesProviderType>
+                     <agencyIndicator>N</agencyIndicator>
+                     <activeIndicator>A</activeIndicator>
+                     <nonFPSettlementSortCode>0</nonFPSettlementSortCode>
+                     <nonFPSettlementAccountNumber>0</nonFPSettlementAccountNumber>
+                     <isCreditCardHOCA>false</isCreditCardHOCA>
+                     <FPSettlementSortCode>0</FPSettlementSortCode>
+                     <FPSettlementAccountNumber>0</FPSettlementAccountNumber>
+                     <FPSettlementType>N</FPSettlementType>
+                     <isFPEnabled>N</isFPEnabled>
+                     <isInternalFunction>true</isInternalFunction>
+                  </sortCodeRegistration>
+               </managingOrganizationUnit>
+               <switchingArrangement>
+                  <switchingStatus>
+                     <schemeName>AccountArrangementSwitchingStatus</schemeName>
+                     <codeValue>Not Switching</codeValue>
+                  </switchingStatus>
+               </switchingArrangement>
+               <currency>
+                  <restrictedStatus>0</restrictedStatus>
+                  <alphabeticCode>
+                     <schemeName>CurrencyType</schemeName>
+                     <codeValue>USD</codeValue>
+                  </alphabeticCode>
+               </currency>
+               <contactPreferences>
+                  <correspondenceDestinationPreference>
+                     <schemeName>CorrespondenceDestinationPreferenceType</schemeName>
+                     <codeValue>M</codeValue>
+                  </correspondenceDestinationPreference>
+               </contactPreferences>
+            </validatedArrangement>
+         </response>
+      </NS2:validateArrangementForPaymentResponse>
+   </NS1:Body>
+</NS1:Envelope>
+
+
