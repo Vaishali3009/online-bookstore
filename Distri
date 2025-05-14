@@ -1,75 +1,137 @@
 package com.rbs.bdd.application.service;
 
+
 import com.rbs.bdd.application.exception.SchemaValidationException;
-import com.rbs.bdd.generated.ValidateArrangementForPaymentRequest;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import com.rbs.bdd.application.port.out.AccountValidationPort;
+import com.rbs.bdd.generated.*;
+import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
 import org.springframework.ws.WebServiceMessage;
 import org.springframework.ws.soap.saaj.SaajSoapMessage;
-
-import javax.xml.soap.MessageFactory;
+import org.w3c.dom.Document;
+import org.w3c.dom.Node;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
+import javax.xml.transform.stream.StreamSource;
+import javax.xml.xpath.XPath;
+import javax.xml.xpath.XPathConstants;
+import javax.xml.xpath.XPathFactory;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.lang.Exception;
 
-import static org.junit.jupiter.api.Assertions.*;
 
-class AccountValidationServiceTest {
+/**
+ * Service class responsible for validating SOAP request schema and applying business rules to static XML response.
+ */
+@Service
+@RequiredArgsConstructor
+public class AccountValidationService implements AccountValidationPort {
 
-    private AccountValidationService service;
+    private static final Logger logger = LoggerFactory.getLogger(AccountValidationService.class);
 
-    @BeforeEach
-    void setUp() {
-        service = new AccountValidationService();
-    }
 
     /**
-     * Test if business rule validation completes successfully with valid SOAP request.
+     * Automatically validates the request schema via Spring WS's interceptor.
      */
-    @Test
-    void shouldProcessFullSoapRequestSuccessfully() {
-        WebServiceMessage message = loadSoapMessageFromXml("static-request/request.xml");
-
-        // You can optionally populate a dummy request (even though it's not used in validation)
-        ValidateArrangementForPaymentRequest request = new ValidateArrangementForPaymentRequest();
-
-        assertDoesNotThrow(() -> service.validateBusinessRules(request, message));
+    @Override
+    public void validateSchema(ValidateArrangementForPaymentRequest request) {
+        logger.info("Schema validation completed (Spring WS handles XSD check)");
     }
 
     /**
-     * Test to verify exception when response1.xml is missing from classpath.
-     */
-    @Test
-    void shouldThrowExceptionIfResponseXmlMissing() {
-        ValidateArrangementForPaymentRequest request = new ValidateArrangementForPaymentRequest();
-        WebServiceMessage message = createEmptySoapMessage();
-
-        // Temporarily rename or delete response1.xml if you want to test this.
-        assertThrows(SchemaValidationException.class,
-                () -> service.validateBusinessRules(request, message));
-    }
-
-    /**
-     * Helper to create an empty SOAP message (used for negative tests).
-     */
-    private WebServiceMessage createEmptySoapMessage() {
-        try {
-            return new SaajSoapMessage(MessageFactory.newInstance().createMessage());
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to create test SOAP message", e);
-        }
-    }
-
-    /**
-     * Loads a SOAP message from a test XML file on the classpath.
+     * Applies business rules to a static SOAP response XML file, modifies specific fields using DOM/XPath,
+     * and writes the transformed XML directly to the outgoing SOAP message.
      *
-     * @param path classpath-relative path to the XML file
-     * @return WebServiceMessage loaded with the test XML
+     * @param request SOAP request containing operating brand
+     * @param message Outgoing SOAP response to be written with modified static content
      */
-    private WebServiceMessage loadSoapMessageFromXml(String path) {
-        try (InputStream inputStream = getClass().getClassLoader().getResourceAsStream(path)) {
-            assertNotNull(inputStream, "SOAP request XML file not found at: " + path);
-            return new SaajSoapMessage(MessageFactory.newInstance().createMessage(null, inputStream));
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to load SOAP message from XML file: " + path, e);
+        @Override
+        public void validateBusinessRules(ValidateArrangementForPaymentRequest request, WebServiceMessage message) {
+            try {
+                logger.info("Starting business rule processing for operating brand: {}", request.getRequestHeader().getOperatingBrand());
+
+                InputStream xml = getClass().getClassLoader().getResourceAsStream("static-response/response1.xml");
+                if (xml == null) {
+                    throw new SchemaValidationException("response1.xml not found in classpath");
+                }
+
+                DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+                factory.setNamespaceAware(true);
+                DocumentBuilder builder = factory.newDocumentBuilder();
+                Document doc = builder.parse(xml);
+
+                XPath xpath = XPathFactory.newInstance().newXPath();
+
+                // Update systemId
+                Node systemId = (Node) xpath.evaluate(
+                        "//*[local-name()='responseId']/*[local-name()='systemId']", doc, XPathConstants.NODE);
+                if (systemId != null) {
+                    systemId.setTextContent("ModifiedESP");
+                    logger.debug("Updated systemId");
+                };
+
+                // Update transactionId
+                Node transactionId = (Node) xpath.evaluate(
+                        "//*[local-name()='responseId']/*[local-name()='transactionId']", doc, XPathConstants.NODE);
+                if (transactionId != null)
+                {
+                    transactionId.setTextContent("ModifiedTxn123");
+                    logger.debug("Updated transactionId");
+                }
+
+                ByteArrayOutputStream rawOutput= new ByteArrayOutputStream();
+                Transformer transformer = TransformerFactory.newInstance().newTransformer();
+                transformer.transform(new DOMSource(doc),new StreamResult(rawOutput));
+
+
+                SaajSoapMessage soapMessage= (SaajSoapMessage) message;
+                soapMessage.getSaajMessage().getSOAPPart().setContent(
+                        new StreamSource(new ByteArrayInputStream(rawOutput.toByteArray()))
+                );
+                logger.info("SOAP response dynamically written from static XML template.");
+            } catch (Exception e) {
+                logger.error("Exception while processing business logic: {}", e.getMessage(), e);
+                throw new SchemaValidationException("Error processing response XML", e);
+            }
         }
     }
-}
+
+
+
+------------------------
+
+
+
+Request :-
+
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:v01="http://com/rbsg/soa/C040PaymentManagement/ArrValidationForPayment/V01/">
+   <soapenv:Header/>
+   <soapenv:Body>
+      <v01:validateArrangementForPayment>
+         <requestHeader>
+            <operatingBrand>ALL</operatingBrand>
+            <!--Zero or more repetitions:-->
+            <requestIds>
+               <systemId>RequestID</systemId>
+               <transactionId>123456789</transactionId>
+            </requestIds>
+            <cmdType>Request</cmdType>
+         </requestHeader>
+         <arrangementIdentifier>
+            <identifier>GB79RBOS16005812345670</identifier>
+            <context>
+               <schemeName>ArrangementEnterpriseIdType</schemeName>
+               <codeValue>InternationalBankAccountNumber</codeValue>
+            </context>
+         </arrangementIdentifier>
+      </v01:validateArrangementForPayment>
+   </soapenv:Body>
+</soapenv:Envelope>
