@@ -1,11 +1,70 @@
-@Bean(name = "ValidateArrangementForPayment")
-public DefaultWsdl11Definition defaultWsdl11Definition(XsdSchema paymentSchema) {
-    DefaultWsdl11Definition definition = new DefaultWsdl11Definition();
-    definition.setPortTypeName("ValidateArrangementForPaymentPort");
-    definition.setLocationUri("/ws"); // Base URI where the service is exposed
-    definition.setTargetNamespace("http://com/rbsg/soa/C040PaymentManagement/ArrValidationForPayment/V01/");
-    definition.setSchema(paymentSchema); // Link to your loaded XSD
-    return definition;
-}
+package com.rbs.bdd.application.service;
 
-http://localhost:8080/ws/ValidateArrangementForPayment.wsdl
+import com.rbs.bdd.generated.ValidateArrangementForPaymentRequest;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.ws.WebServiceMessage;
+import org.springframework.ws.soap.saaj.SaajSoapMessage;
+import org.springframework.ws.test.support.MockWebServiceMessage;
+
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.Unmarshaller;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.transform.stream.StreamSource;
+import java.io.InputStream;
+
+import static org.junit.jupiter.api.Assertions.*;
+import org.w3c.dom.Document;
+import org.w3c.dom.Node;
+import javax.xml.xpath.*;
+
+public class AccountValidationServiceTest {
+
+    private AccountValidationService accountValidationService;
+
+    @BeforeEach
+    void setUp() {
+        accountValidationService = new AccountValidationService();
+    }
+
+    @Test
+    void testValidateArrangementForPayment_ModifiesStaticXmlCorrectly() throws Exception {
+        // Load static-request.xml from test resources
+        InputStream is = getClass().getClassLoader()
+                .getResourceAsStream("static-request/static-request.xml");
+        assertNotNull(is, "static-request.xml not found");
+
+        JAXBContext jaxbContext = JAXBContext.newInstance(ValidateArrangementForPaymentRequest.class);
+        Unmarshaller unmarshaller = jaxbContext.createUnmarshaller();
+        ValidateArrangementForPaymentRequest request = 
+            (ValidateArrangementForPaymentRequest) unmarshaller.unmarshal(is);
+
+        // Mock WebServiceMessage
+        SaajSoapMessage soapMessage = new SaajSoapMessage();
+        WebServiceMessage message = soapMessage;
+
+        // Call service methods
+        accountValidationService.validateSchema(request);
+        accountValidationService.validateBusinessRules(request, message);
+
+        // Parse modified SOAP response from message
+        Document doc = DocumentBuilderFactory.newInstance().newDocumentBuilder()
+                .parse(message.getPayloadSource().getInputStream());
+
+        XPath xpath = XPathFactory.newInstance().newXPath();
+
+        // Validate modified systemId
+        Node systemId = (Node) xpath.evaluate(
+                "//*[local-name()='responseId']/*[local-name()='systemId']",
+                doc, XPathConstants.NODE);
+        assertNotNull(systemId);
+        assertEquals("ModifiedESP", systemId.getTextContent());
+
+        // Validate modified transactionId
+        Node transactionId = (Node) xpath.evaluate(
+                "//*[local-name()='responseId']/*[local-name()='transactionId']",
+                doc, XPathConstants.NODE);
+        assertNotNull(transactionId);
+        assertEquals("ModifiedTxn123", transactionId.getTextContent());
+    }
+}
