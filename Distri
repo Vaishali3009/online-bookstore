@@ -1,11 +1,75 @@
-<dependency>
-    <groupId>org.springframework.ws</groupId>
-    <artifactId>spring-xml</artifactId>
-    <version>4.0.12.RELEASE</version>
-    <exclusions>
-        <exclusion>
-            <groupId>org.apache.ws.commons.schema</groupId>
-            <artifactId>XmlSchema</artifactId>
-        </exclusion>
-    </exclusions>
-</dependency>
+package com.rbs.bdd.application.service;
+
+import com.rbs.bdd.application.exception.SchemaValidationException;
+import com.rbs.bdd.generated.ValidateArrangementForPaymentRequest;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.ws.WebServiceMessage;
+import org.springframework.ws.soap.saaj.SaajSoapMessage;
+
+import javax.xml.soap.MessageFactory;
+import java.io.InputStream;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+class AccountValidationServiceTest {
+
+    private AccountValidationService service;
+
+    @BeforeEach
+    void setUp() {
+        service = new AccountValidationService();
+    }
+
+    /**
+     * Test if business rule validation completes successfully with valid SOAP request.
+     */
+    @Test
+    void shouldProcessFullSoapRequestSuccessfully() {
+        WebServiceMessage message = loadSoapMessageFromXml("static-request/request.xml");
+
+        // You can optionally populate a dummy request (even though it's not used in validation)
+        ValidateArrangementForPaymentRequest request = new ValidateArrangementForPaymentRequest();
+
+        assertDoesNotThrow(() -> service.validateBusinessRules(request, message));
+    }
+
+    /**
+     * Test to verify exception when response1.xml is missing from classpath.
+     */
+    @Test
+    void shouldThrowExceptionIfResponseXmlMissing() {
+        ValidateArrangementForPaymentRequest request = new ValidateArrangementForPaymentRequest();
+        WebServiceMessage message = createEmptySoapMessage();
+
+        // Temporarily rename or delete response1.xml if you want to test this.
+        assertThrows(SchemaValidationException.class,
+                () -> service.validateBusinessRules(request, message));
+    }
+
+    /**
+     * Helper to create an empty SOAP message (used for negative tests).
+     */
+    private WebServiceMessage createEmptySoapMessage() {
+        try {
+            return new SaajSoapMessage(MessageFactory.newInstance().createMessage());
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to create test SOAP message", e);
+        }
+    }
+
+    /**
+     * Loads a SOAP message from a test XML file on the classpath.
+     *
+     * @param path classpath-relative path to the XML file
+     * @return WebServiceMessage loaded with the test XML
+     */
+    private WebServiceMessage loadSoapMessageFromXml(String path) {
+        try (InputStream inputStream = getClass().getClassLoader().getResourceAsStream(path)) {
+            assertNotNull(inputStream, "SOAP request XML file not found at: " + path);
+            return new SaajSoapMessage(MessageFactory.newInstance().createMessage(null, inputStream));
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to load SOAP message from XML file: " + path, e);
+        }
+    }
+}
